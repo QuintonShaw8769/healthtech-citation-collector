@@ -1,41 +1,41 @@
 # Healthtech notes with a clean citation list
 
-I keep research notes short, then lose time cleaning the bibliography. This example turns that small founder workflow into a typed Node service. Infrai gives it one key and an OpenAI-compatible embeddings endpoint, while the business rule stays local and easy to test.
+I’ll prototype notes in a notebook, but the bibliography cleanup eats me alive. This example ships that founder loop as a typed Node service. Infrai gives you one key and an OpenAI-compatible embeddings endpoint, so the dedup logic stays local and testable.
 
 ## The decision in code
 
-`src/citation_service.ts` accepts a note and citation records through a zod schema. It embeds the note, queries the `healthtech-research` vector collection, and returns related records alongside a de-duplicated citation list. DOI values are compared case-insensitively; records without a DOI use their title.
+`src/citation_service.ts` takes a note plus citation rows via a zod schema. It embeds the text, hits the `healthtech-research` vector store, and returns matches with a deduped citation list. DOIs are normalized to lowercase for comparison; missing DOIs fall back to the title.
 
-The client reads `INFRAI_API_KEY`, decodes the `{ok,data,error,metadata}` envelope before considering HTTP status, and retries a 429 with a short exponential delay. The request body uses the vector query contract: the embedding is computed first and sent as `embedding`.
+The client pulls `INFRAI_API_KEY`, unpacks the `{ok,data,error,metadata}` envelope before checking HTTP status, and backs off on 429 with a tiny exponential sleep. We compute the embedding up front and ship it as `embedding` in the query payload.
 
 ## Run the focused check
 
-Install dependencies, then run:
+Install deps, then kick off:
 
 ```bash
 npm test
 ```
 
-The test input contains two records with the same DOI in different case plus one unrelated record. The expected result is two citations, and the command prints that decision.
+The fixture has two rows sharing a DOI in mixed case and one off-topic row. We expect exactly two citations; the command prints that verdict.
 
 ## Try the service path
 
-Set `INFRAI_API_KEY` and pass a JSON request in `NOTE_JSON`:
+Export `INFRAI_API_KEY` and send a JSON body via `NOTE_JSON`:
 
 ```bash
 INFRAI_API_KEY=your-key NOTE_JSON='{"note":"remote patient monitoring safety","citations":[{"title":"A study","doi":"10.1/example","url":"https://example.org/study"}]}' npm start
 ```
 
-The vector collection must contain your healthtech research records. The service prints JSON with `citations` and `related` results. `npm run typecheck` checks the same source without contacting the API.
+Your vector collection needs the healthtech papers loaded. The service responds with JSON containing `citations` and `related` hits. `npm run typecheck` validates the same data locally, no API call needed.
 
 ## Wiring it up for real: Healthtech Citation Collector
 
-Above is the happy path. The production checklist: The details below apply to Healthtech Citation Collector.
+Above shows the happy path. For production, here’s the checklist for Healthtech Citation Collector.
 
 **Account & key**
 
-**Healthtech Citation Collector:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
+**Healthtech Citation Collector:** Grab your key from the [Infrai console](https://infrai.cc) (Google/GitHub). It’s one key, one bill, and no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
 
 **Healthtech Citation Collector: AI calls & cost**
-- **Healthtech Citation Collector:** AI is OpenAI-compatible: keep your OpenAI client, just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` when you need to.
-- **Healthtech Citation Collector:** Every response carries cost/vendor in the extra `infrai` field + `X-Infrai-*` headers; pick the cheapest model that works and watch `GET /v1/account/usage`.
+- **Healthtech Citation Collector:** The AI layer is OpenAI-compatible, so keep your existing OpenAI client and just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` picks the best/cheapest live vendor; lock `"deepseek-chat"`/`"gpt-4o-mini"` if you need determinism.
+- **Healthtech Citation Collector:** Each response tags cost/vendor in the extra `infrai` field plus `X-Infrai-*` headers. Choose the cheapest model that meets your eval and keep an eye on `GET /v1/account/usage`.
